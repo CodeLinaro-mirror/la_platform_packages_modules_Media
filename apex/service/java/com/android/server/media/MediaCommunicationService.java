@@ -16,11 +16,13 @@
 package com.android.server.media;
 
 import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
+import static android.Manifest.permission.MEDIA_CONTENT_CONTROL;
 import static android.os.UserHandle.ALL;
 import static android.os.UserHandle.getUserHandleForUid;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.RequiresPermission;
 import android.app.ActivityManager;
 import android.app.NotificationManager;
 import android.content.Context;
@@ -272,20 +274,15 @@ public class MediaCommunicationService extends SystemService {
         }
     }
 
-    void onSessionDied(Session2Record session) {
+    private void removeSessionRecord(Session2Record session) {
         if (DEBUG) {
-            Log.d(TAG, "Destroying " + session);
-        }
-        if (session.isClosed()) {
-            Log.w(TAG, "Destroying already destroyed session. Ignoring.");
-            return;
+            Log.d(TAG, "Removing " + session);
         }
 
         FullUserRecord user = session.getFullUser();
         if (user != null) {
             user.removeSession(session);
         }
-        session.close();
     }
 
     void onSessionPlaybackStateChanged(Session2Record session, boolean promotePriority) {
@@ -423,16 +420,23 @@ public class MediaCommunicationService extends SystemService {
         }
 
         @Override
-        public void registerCallback(IMediaCommunicationServiceCallback callback,
-                String packageName) throws RemoteException {
+        @RequiresPermission(MEDIA_CONTENT_CONTROL)
+        public void registerCallback(@NonNull IMediaCommunicationServiceCallback callback,
+                                     @NonNull String packageName) throws RemoteException {
             Objects.requireNonNull(callback, "callback should not be null");
             Objects.requireNonNull(packageName, "packageName should not be null");
 
+            final int uid = Binder.getCallingUid();
+            final int pid = Binder.getCallingPid();
+            if (!hasMediaControlPermission(pid, uid)){
+                throw new SecurityException("MEDIA_CONTENT_CONTROL permission is required to"
+                        + " register MediaCommunicationServiceCallback");
+            }
+
             synchronized (mLock) {
                 if (findCallbackRecordLocked(callback) == null) {
-
                     CallbackRecord record = new CallbackRecord(callback, packageName,
-                            Binder.getCallingUid(), Binder.getCallingPid());
+                            uid, pid);
                     mCallbackRecords.add(record);
                     try {
                         callback.asBinder().linkToDeath(record, 0);
@@ -681,10 +685,13 @@ public class MediaCommunicationService extends SystemService {
                 }
                 synchronized (mSession2RecordLock) {
                     mIsConnected = false;
+                    // As per onDisconnected documentation, we do not need to call close() after
+                    // onDisconnected is called.
+                    mIsClosed = true;
                 }
                 MediaCommunicationService service = mServiceRef.get();
                 if (service != null) {
-                    service.onSessionDied(Session2Record.this);
+                    service.removeSessionRecord(Session2Record.this);
                 }
             }
 

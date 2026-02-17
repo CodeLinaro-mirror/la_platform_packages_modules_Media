@@ -557,7 +557,13 @@ public final class MediaParser {
     public static final int SAMPLE_FLAG_LAST_SAMPLE = 1 << 29;
     /** Indicates that the sample is (at least partially) encrypted. */
     public static final int SAMPLE_FLAG_ENCRYPTED = 1 << 30;
-    /** Indicates that the sample should be decoded but not rendered. */
+    /**
+     * Indicates that the sample should be decoded but not rendered.
+     *
+     * @deprecated This flag is no longer supported and will be ignored.
+     */
+    @Deprecated
+    @FlaggedApi(Flags.FLAG_DEPRECATE_MEDIAPARSER_SAMPLE_FLAG_DECODE_ONLY)
     public static final int SAMPLE_FLAG_DECODE_ONLY = 1 << 31;
 
     // Parser implementation names.
@@ -664,7 +670,14 @@ public final class MediaParser {
                 PARAMETER_TS_DETECT_ACCESS_UNITS,
                 PARAMETER_TS_ENABLE_HDMV_DTS_AUDIO_STREAMS,
                 PARAMETER_IN_BAND_CRYPTO_INFO,
-                PARAMETER_INCLUDE_SUPPLEMENTAL_DATA
+                PARAMETER_INCLUDE_SUPPLEMENTAL_DATA,
+                PARAMETER_IGNORE_TIMESTAMP_OFFSET,
+                PARAMETER_EAGERLY_EXPOSE_TRACKTYPE,
+                PARAMETER_EXPOSE_DUMMY_SEEKMAP,
+                PARAMETER_EXPOSE_CHUNK_INDEX_AS_MEDIA_FORMAT,
+                PARAMETER_EXPOSE_CAPTION_FORMATS,
+                PARAMETER_OVERRIDE_IN_BAND_CAPTION_DECLARATIONS,
+                PARAMETER_EXPOSE_EMSG_TRACK
             })
     public @interface ParameterName {}
 

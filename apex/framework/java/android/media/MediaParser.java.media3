@@ -688,7 +688,14 @@ public final class MediaParser {
                 PARAMETER_TS_DETECT_ACCESS_UNITS,
                 PARAMETER_TS_ENABLE_HDMV_DTS_AUDIO_STREAMS,
                 PARAMETER_IN_BAND_CRYPTO_INFO,
-                PARAMETER_INCLUDE_SUPPLEMENTAL_DATA
+                PARAMETER_INCLUDE_SUPPLEMENTAL_DATA,
+                PARAMETER_IGNORE_TIMESTAMP_OFFSET,
+                PARAMETER_EAGERLY_EXPOSE_TRACKTYPE,
+                PARAMETER_EXPOSE_DUMMY_SEEKMAP,
+                PARAMETER_EXPOSE_CHUNK_INDEX_AS_MEDIA_FORMAT,
+                PARAMETER_EXPOSE_CAPTION_FORMATS,
+                PARAMETER_OVERRIDE_IN_BAND_CAPTION_DECLARATIONS,
+                PARAMETER_EXPOSE_EMSG_TRACK
             })
     public @interface ParameterName {}
 
@@ -1760,6 +1767,9 @@ public final class MediaParser {
         private boolean mHasSubsampleEncryptionData;
         private int mSkippedSupplementalDataBytes;
 
+        private long mDurationUs;
+        private Format mFormat;
+
         private TrackOutputAdapter(int trackIndex) {
             mTrackIndex = trackIndex;
             mScratchIvSpace = new byte[16]; // Size documented in CryptoInfo.
@@ -1768,15 +1778,34 @@ public final class MediaParser {
             mEncryptionDataReadState = STATE_READING_SIGNAL_BYTE;
             mLastOutputEncryptionPattern =
                     new CryptoInfo.Pattern(/* blocksToEncrypt= */ 0, /* blocksToSkip= */ 0);
+            mDurationUs = C.TIME_UNSET;
         }
 
         @Override
         public void format(Format format) {
-            mTrackFormats.put(mTrackIndex, format);
+            mFormat = format;
+            emitTrackData();
+        }
+
+        @Override
+        public void durationUs(long durationUs) {
+            mDurationUs = durationUs;
+            if (Flags.mediaparserEmitTrackDuration() && mFormat != null) {
+                // Re-emit if format was already reported to include the newly found duration.
+                emitTrackData();
+            }
+        }
+
+        private void emitTrackData() {
+            mTrackFormats.put(mTrackIndex, mFormat);
+            MediaFormat mediaFormat = toMediaFormat(mFormat);
+            if (Flags.mediaparserEmitTrackDuration() && mDurationUs != C.TIME_UNSET) {
+                mediaFormat.setLong(MediaFormat.KEY_DURATION, mDurationUs);
+            }
             mOutputConsumer.onTrackDataFound(
                     mTrackIndex,
                     new TrackData(
-                            toMediaFormat(format), toFrameworkDrmInitData(format.drmInitData)));
+                            mediaFormat, toFrameworkDrmInitData(mFormat.drmInitData)));
         }
 
         @Override
